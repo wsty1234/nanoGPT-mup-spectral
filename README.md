@@ -4,8 +4,9 @@
 This repository is a fork of [nanoGPT](https://github.com/karpathy/nanoGPT) that provides a minimal implementation of the [maximal update parameterization](https://arxiv.org/abs/2203.03466) ([muP](https://github.com/microsoft/mup)).
 
 Branches
-- The [master branch](https://github.com/EleutherAI/nanoGPT-mup) acts as supplementary material for ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization).
-- The [supar branch](https://github.com/EleutherAI/nanoGPT-mup/tree/supar) contains a minimal implementation of sparse maximal update parameterization (SuPar) introduced in [Sparse maximal update parameterization: A holistic approach to sparse training dynamics](https://arxiv.org/abs/2405.15743).
+- The [master](https://github.com/EleutherAI/nanoGPT-mup) branch acts as supplementary material for ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization).
+- The [supar](https://github.com/EleutherAI/nanoGPT-mup/tree/supar) branch contains a minimal implementation of sparse maximal update parameterization (SuPar) introduced in [Sparse maximal update parameterization: A holistic approach to sparse training dynamics](https://arxiv.org/abs/2405.15743).
+- The [completep](https://github.com/EleutherAI/nanoGPT-mup/tree/completep) branch contains a minimal implementation of CompleteP introduced in [Don't be lazy: CompleteP enables compute-efficient deep transformers](https://arxiv.org/abs/2505.01618).
 
 The [mup_examples](https://github.com/EleutherAI/nanoGPT-mup/tree/master/mup_examples) folder contains scripts to reproduce the plots in ["The Practitioner’s Guide to the Maximal Update Parameterization"](https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization) (see [mup_examples/README.md](https://github.com/EleutherAI/nanoGPT-mup/blob/master/mup_examples/README.md) for instructions to reproduce). 
 
