@@ -59,7 +59,7 @@ def transform_format_string(s):
     return re.sub(pattern, lambda m: f"{m.group(1)}={{{m.group(1)}{m.group(2) or ''}}}", s)
 
 class CSVLogWrapper:
-    def __init__(self, logf=None, config={}, out_dir=None):
+    def __init__(self, logf=None, config={}, out_dir=None, flush_every: int = 100):
         self.logf = logf
         self.config = config
         self.log_dict = {}
@@ -68,6 +68,7 @@ class CSVLogWrapper:
         self.csv_header_file = None
         self.csv_writer = None
         self.step_count = 0
+        self.flush_every = flush_every  # how often to flush; 0 = never flush mid-run
         self.ordered_keys = []
         self.header_updated = False
         self.is_finalized = False
@@ -134,7 +135,8 @@ class CSVLogWrapper:
             # Prepare the row data
             row_data = [self.step_count] + [self.log_dict.get(key, '') for key in self.ordered_keys]
             self.csv_writer.writerow(row_data)
-            self.csv_data_file.flush()  # Ensure data is written to file
+            if self.flush_every and (self.step_count % self.flush_every == 0):
+                self.csv_data_file.flush()
 
         self.step_count += 1
         self.log_dict.clear()
