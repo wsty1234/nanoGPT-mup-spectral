@@ -48,6 +48,7 @@ wandb_project = 'owt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # csv logging
 csv_log = False # If enabled, logs stats to a csv file
+flush_every = 100 # how often to flush, set to 0 to only flush on close
 # data
 dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
@@ -276,7 +277,7 @@ if master_process:
         from csv_logging import CSVLogWrapper
         def log(log_dict):
             pass
-        csv_logger = CSVLogWrapper(log, config=config, out_dir=out_dir)
+        csv_logger = CSVLogWrapper(log, config=config, out_dir=out_dir, flush_every=flush_every)
 
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
