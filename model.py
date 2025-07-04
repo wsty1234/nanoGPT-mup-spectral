@@ -14,6 +14,20 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import numpy as np
+
+def spectral_sigma(fan_in, fan_out, init_std):
+    """Spectral parameterization from the [paper](https://arxiv.org/abs/2310.17813)."""
+    return (init_std / math.sqrt(fan_in)) * min(1, math.sqrt(fan_out / fan_in))
+
+def spectral_lr_sgd(fan_in, fan_out):
+    """Spectral parameterization from the [paper](https://arxiv.org/abs/2310.17813)."""
+    return fan_out / fan_in
+
+def spectral_lr_adamw(fan_in):
+    """Spectral parameterization from the [paper](https://arxiv.org/abs/2310.17813)."""
+    return 1.0 / fan_in
+
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -155,6 +169,7 @@ class GPT(nn.Module):
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
         self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
 
+        self.layer_scale_dict = {}
         # init all weights
         self.apply(self._init_weights)
         # apply special scaled init to the residual projections, per GPT-2 paper
@@ -163,9 +178,23 @@ class GPT(nn.Module):
                 ### Begin muP code ###
                 # Adjust hidden weight initialization variance by 1 / mup_width_multiplier
                 if pn.endswith('c_attn.weight') or pn.endswith('c_fc.weight'):
-                    torch.nn.init.normal_(p, mean=0.0, std=config.init_std / math.sqrt(config.mup_width_multiplier))
+                    weight_shape = p.shape
+                    fan_in =  weight_shape[-1]
+                    fan_out = np.prod(weight_shape[:-1])
+                    cal_init_std = spectral_sigma(fan_in, fan_out, config.init_std)
+                    layer_scale = spectral_lr_adamw(fan_in)
+                    self.layer_scale_dict[pn] = layer_scale
+                    torch.nn.init.normal_(p, mean=0.0, std=cal_init_std)
+                    # torch.nn.init.normal_(p, mean=0.0, std=config.init_std / math.sqrt(config.mup_width_multiplier))
                 elif pn.endswith('c_proj.weight'):
-                    torch.nn.init.normal_(p, mean=0.0, std=config.init_std / math.sqrt(2 * config.n_layer * config.mup_width_multiplier))
+                    weight_shape = p.shape
+                    fan_in =  weight_shape[-1]
+                    fan_out = np.prod(weight_shape[:-1])
+                    layer_scale = spectral_lr_adamw(fan_in)
+                    self.layer_scale_dict[pn] = layer_scale
+                    cal_init_std = spectral_sigma(fan_in, fan_out, config.init_std)
+                    torch.nn.init.normal_(p, mean=0.0, std=cal_init_std)
+                    # torch.nn.init.normal_(p, mean=0.0, std=config.init_std / math.sqrt(2 * config.n_layer * config.mup_width_multiplier))
                 ### End muP code ###
             elif pn.endswith('c_proj.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=config.init_std / math.sqrt(2 * config.n_layer))
@@ -217,6 +246,7 @@ class GPT(nn.Module):
                 ### Begin muP code ###
                 # Scaling `x` instead of `logits` allows coord check to log change
                 x *= self.config.mup_output_alpha / self.config.mup_width_multiplier
+                # x *= self.config.mup_output_alpha 
                 ### End muP code ###
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
@@ -307,19 +337,32 @@ class GPT(nn.Module):
             mup_decay_params = []
             decay_params = []
             nodecay_params = []
+            # mup_lr_scale = []
             for n, p in param_dict.items():
                 if p.dim() >= 2:
                     if n.endswith('c_attn.weight') or n.endswith('c_fc.weight') or n.endswith('c_proj.weight'):
                         mup_decay_params.append(p)
+                        # mup_lr_scale.append(self.layer_scale_dict.get(n, 1.0))
                     else:
                         decay_params.append(p)
                 else:
                     nodecay_params.append(p)
+
+            # optim_groups = [ {"params": [p], "weight_decay":weight_decay,
+            #                        "lr_scale": self.layer_scale_dict.get(name, 1.0)} for name, p in self.named_parameters()]
+            
+            # optim_groups = [
+            #     *[{'params': [p], 'weight_decay': weight_decay, 'lr_scale': mup_lr_scale[idx]} for idx, p in enumerate(mup_decay_params)],
+            #     {'params': decay_params, 'weight_decay': weight_decay, 'lr_scale': 1},
+            #     {'params': nodecay_params, 'weight_decay': 0.0, 'lr_scale': 1}
+            # ] here is lr scale not lr
+
             optim_groups = [
                 {'params': mup_decay_params, 'weight_decay': weight_decay, 'lr_scale': 1/self.config.mup_width_multiplier},
                 {'params': decay_params, 'weight_decay': weight_decay, 'lr_scale': 1},
                 {'params': nodecay_params, 'weight_decay': 0.0, 'lr_scale': 1}
             ]
+
             num_mup_decay_params = sum(p.numel() for p in mup_decay_params)
             num_decay_params = sum(p.numel() for p in decay_params)
             num_nodecay_params = sum(p.numel() for p in nodecay_params)
